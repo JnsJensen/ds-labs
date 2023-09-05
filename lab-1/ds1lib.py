@@ -3,6 +3,7 @@ from termcolor import colored, cprint
 import os
 import threading
 import time
+from pathlib import Path
 
 # class enum for message types
 class MessageType:
@@ -34,9 +35,10 @@ Takes:
     - port: server port
 """
 class DSClient:
-    def __init__(self, host, port):
+    def __init__(self, host: int, port: int, mnt: Path):
         self.host = host
         self.port = port
+        self.mnt = mnt
         self.socket = None
 
     def connect(self):
@@ -60,16 +62,24 @@ class DSClient:
         cprint("Closing the connection", "red")
         self.socket.close()
     
-    def prompt_user(self):
+    def prompt_user(self) -> bool | tuple:
         # ask which message type to send
         message_type = input(
-            colored("Enter message type (1 = string, 2 = binary): ", attrs=["bold"])
+            colored(
+                "Enter message type:"
+                + "\n\t1 = string"
+                + "\n\t2 = binary"
+                + "\n\t3 = upload\n",
+                attrs=["bold"]
+            )
         )
 
         # check if message type is valid
-        if message_type not in ["1", "2"]:
+        if message_type not in ["1", "2", "3"]:
             cprint("Invalid message type", "red")
             return False
+
+        # else if message type is valid, continue:
         message_length = 0
 
         if message_type == "1":
@@ -106,11 +116,51 @@ class DSClient:
             data = os.urandom(message_length)
             # prepend the binary message type in one byte
             data = bytes([binary_message_type_choice]) + data
+        
+        elif message_type == "3":
+            # ask for a file path
+            file_path = self.mnt \
+                / Path(input(colored("Enter a file path: ", attrs=["bold"])))
+            cprint(f"File path: {file_path}", "blue")
+
+            # check if the file exists
+            if not os.path.isfile(file_path):
+                cprint(f"File {file_path} not found", "red")
+                return False
+            else:
+                # send file name to server
+                file_name = file_path.name
+                file_name = bytes([3]) + file_name.encode("utf-8")
+                self.connect()
+                while self.send_msg(1, file_name) == False:
+                    pass
+                self.close()
+            
+            # # read the file
+            # with open(file_path, "rb") as f:
+            #     data = f.read()
+            
+            # # prepend the binary message type in one byte
+            # data = bytes([3]) + data
+            # # set the message length to the file size
+            # message_length = len(data)
+        
         return message_type, data, message_length
-    
+
     def spin(self):
         while True:
-            message_type, data, message_length = self.prompt_user()
+            # msg could be False 
+            # or a correctly formed message
+            msg = self.prompt_user()
+            # if False, it failed
+            # so we continue to the next iteration
+            if msg == False:
+                continue
+            
+            # if message created correctly
+            # unpack the message
+            message_type, data, message_length = msg
+
             self.connect()
             while self.send_msg(message_type, data, length=message_length) == False:
                 pass
@@ -128,7 +178,7 @@ Takes:
     - port: server port
 """
 class DSServer:
-    def __init__(self, host="127.0.0.1", port=9000):
+    def __init__(self, host: int, port: int, mnt: Path):
         self.HOST = host
         self.PORT = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

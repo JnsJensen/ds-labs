@@ -78,9 +78,11 @@ THIS IS THE SERVER
 """
 
 from ds1lib import DSServer
+from pathlib import Path
 
 HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 PORT = 9000  # Port to listen on (non-privileged ports are > 1023)
+MNT = Path("./mnt/server")
 
-server = DSServer(HOST, PORT)
+server = DSServer(HOST, PORT, MNT)
 server.spin()

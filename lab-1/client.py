@@ -78,12 +78,14 @@ THIS IS THE CLIENT
 """
 
 from ds1lib import DSClient
+from pathlib import Path
 
 HOST = "127.0.0.1"  # The server's hostname or IP address
 PORT = 9000  # The port used by the server
+MNT = Path("./mnt/client")
 
 # print(MessageType.BinaryType.values())
 # print(MessageType.BinaryType.keys())
 
-client = DSClient(HOST, PORT)
+client = DSClient(HOST, PORT, MNT)
 client.spin()
