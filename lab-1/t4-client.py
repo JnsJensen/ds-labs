@@ -55,22 +55,38 @@ Extend the server to parse the received message, and handle it according to the 
 type. If a string was received, print it to the console. If binary data was sent by the
 client, store it as a file with a random generated filename.
 
+TASK 5: Send Data Size
+
+Extend message type #2 to include the data size before sending the data itself. You can
+choose a number of bytes to encode this information, and make sure the client never
+tries to send data more than what can be encoded on this many bytes. Alternatively, you
+can introduce different message types that define the data size bytes. For example:
+
+# String message
+MESSAGE_STRING = 1  
+# Data message, data size is encoded on 1 byte (data size: up to 255 bytes)
+MESSAGE_DATA_1B = 2
+# Data message, data size is encoded on 2 bytes (data size: up to 64 kB)
+MESSAGE_DATA_2B = 3
+# Data message, data size is encoded on 3 bytes (data size: up to 16 MB)
+MESSAGE_DATA_3B = 4
+...
+
+The server should verify that every byte was received before saving the file.
+
 THIS IS THE CLIENT
 """
 
 import socket
 from termcolor import colored, cprint
 import os
+from message_type import MessageType
 
 HOST = "127.0.0.1"  # The server's hostname or IP address
 PORT = 9000  # The port used by the server
 
-
-# class enum for message types
-class MessageType:
-    STRING = 1
-    BINARY = 2
-
+# print(MessageType.BinaryType.values())
+# print(MessageType.BinaryType.keys())
 
 while True:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -78,6 +94,7 @@ while True:
         message_type = input(
             colored("Enter message type (1 = string, 2 = binary): ", attrs=["bold"])
         )
+        message_length = 0
 
         if message_type == "1":
             # read a string from the standard input
@@ -85,9 +102,32 @@ while True:
             # convert the string to bytes and limit the size to 4kB
             data = data.encode("utf-8")[:4096]
         elif message_type == "2":
+            # ask for message length
+            print("Message length options:")
+            print(
+                "\t1: 1B\n\t2: 10B\n\t3: 100B"
+                + "\n\t4: 1KB\n\t5: 10KB\n\t6: 100KB"
+                + "\n\t7: 1MB\n\t8: 10MB\n\t9: 100MB\n"
+            )
+            binary_message_type_choice = input(
+                colored("Enter message length in bytes: ", attrs=["bold"])
+            )
+
+            try:
+                binary_message_type_choice = int(binary_message_type_choice)
+                if binary_message_type_choice not in range(len(MessageType.BinaryType)):
+                    raise ValueError
+            except ValueError:
+                cprint("Invalid message length", "red")
+                continue
+
+            message_length = list(MessageType.BinaryType.values())[
+                binary_message_type_choice
+            ]
             # generate a random byte array
-            data = os.urandom(4096)
-            # overwrite start byte to
+            data = os.urandom(message_length)
+            # prepend the binary message type in one byte
+            data = bytes([binary_message_type_choice]) + data
         else:
             # invalid message type
             cprint("Invalid message type", "red")
@@ -103,7 +143,11 @@ while True:
         cprint(f"Connected to {HOST}:{PORT}", "green")
 
         # send some data
-        cprint(f"Sending a message of type {message_type}", "blue")
+        cprint(
+            f"Sending a message of type {message_type},"
+            + f" with a length of {message_length}B",
+            "blue",
+        )
         s.sendall(data)
 
         # closing the connection

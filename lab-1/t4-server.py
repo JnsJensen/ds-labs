@@ -55,6 +55,25 @@ Extend the server to parse the received message, and handle it according to the 
 type. If a string was received, print it to the console. If binary data was sent by the
 client, store it as a file with a random generated filename.
 
+TASK 5: Send Data Size
+
+Extend message type #2 to include the data size before sending the data itself. You can
+choose a number of bytes to encode this information, and make sure the client never
+tries to send data more than what can be encoded on this many bytes. Alternatively, you
+can introduce different message types that define the data size bytes. For example:
+
+# String message
+MESSAGE_STRING = 1
+# Data message, data size is encoded on 1 byte (data size: up to 255 bytes)
+MESSAGE_DATA_1B = 2
+# Data message, data size is encoded on 2 bytes (data size: up to 64 kB)
+MESSAGE_DATA_2B = 3
+# Data message, data size is encoded on 3 bytes (data size: up to 16 MB)
+MESSAGE_DATA_3B = 4
+...
+
+The server should verify that every byte was received before saving the file.
+
 THIS IS THE SERVER
 """
 
@@ -64,6 +83,7 @@ from termcolor import colored, cprint
 import threading
 import time
 import os
+from message_type import MessageType
 
 HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 PORT = 9000  # Port to listen on (non-privileged ports are > 1023)
@@ -71,16 +91,40 @@ PORT = 9000  # Port to listen on (non-privileged ports are > 1023)
 
 def client_thread(connection, client_address):
     # Print the remote address
-    cprint(f"Connection from {client_address}", "green")
+    cprint(f"\nConnection from {client_address}", "green")
+    data = []
     # receive data from the client
-    data = connection.recv(4096)
+    while True:
+        data += connection.recv(1024)
+        if not data:
+            break
     try:
         # convert the bytes to string
         data = data.decode("utf-8")
         # print the received data
         cprint(f"\nMessage: {data}", "white", "on_cyan")
     except UnicodeDecodeError:
-        cprint("Received binary data", "red")
+        cprint("\nReceived binary data", "red")
+
+        # check the message type
+        message_type = data[0]
+        data = data[1:]
+
+        print(f"Message type: {list(MessageType.BinaryType.keys())[message_type]}")
+
+        expected_message_length = list(MessageType.BinaryType.values())[message_type]
+        # make sure all bytes are received
+        if len(data) < expected_message_length:
+            cprint(
+                f"\nReceived {len(data)} bytes,"
+                + f" expected {expected_message_length} bytes"
+                + " - Data will not be saved to file",
+                "red",
+            )
+            return
+        else:
+            cprint(f"\nReceived {len(data)}B", "green")
+
         # generate a random filename
         filename = f"out/file-{time.time()}.bin"
         # create the directory if it doesn't exist
@@ -95,37 +139,13 @@ def client_thread(connection, client_address):
     connection.close()
 
 
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind((HOST, PORT))
+sock.listen(1)
+
 while True:
-    connected = False
-    socketed = False
-    sock = None
-    while not connected and not socketed:
-        try:
-            # Create a TCP/IP socket
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            socketed = True
-            cprint("Socket created", "light_grey")
-        except socket.error as msg:
-            sys.stderr.write(
-                colored(f"Failed to create socket. Error code: {msg[1]}\n", "red")
-            )
-            sys.exit()
-
-        try:
-            # Bind the socket to the port
-            cprint(f"Binding socket to {HOST} port {PORT}", "blue")
-            sock.bind((HOST, PORT))
-            connected = True
-            cprint("Socket bind complete", "light_grey")
-        except socket.error as msg:
-            sys.stderr.write(
-                colored(f"Failed to bind socket. Error code: {msg}\n", "red")
-            )
-            time.sleep(1)
-
     # Wait for a connection
-    cprint("Waiting for a connection...", attrs=["bold"])
-    sock.listen(1)
+    cprint("\nWaiting for a connection...", attrs=["bold"])
     connection, client_address = sock.accept()
 
     # Modify the server code to start a new background thread for each new incoming
