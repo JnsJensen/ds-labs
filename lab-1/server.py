@@ -77,78 +77,10 @@ The server should verify that every byte was received before saving the file.
 THIS IS THE SERVER
 """
 
-import socket
-import sys
-from termcolor import colored, cprint
-import threading
-import time
-import os
-from message_type import MessageType
+from ds1lib import DSServer
 
 HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 PORT = 9000  # Port to listen on (non-privileged ports are > 1023)
 
-
-def client_thread(connection, client_address):
-    # Print the remote address
-    cprint(f"\nConnection from {client_address}", "green")
-    data = []
-    # receive data from the client
-    while True:
-        data += connection.recv(1024)
-        if not data:
-            break
-    try:
-        # convert the bytes to string
-        data = data.decode("utf-8")
-        # print the received data
-        cprint(f"\nMessage: {data}", "white", "on_cyan")
-    except UnicodeDecodeError:
-        cprint("\nReceived binary data", "red")
-
-        # check the message type
-        message_type = data[0]
-        data = data[1:]
-
-        print(f"Message type: {list(MessageType.BinaryType.keys())[message_type]}")
-
-        expected_message_length = list(MessageType.BinaryType.values())[message_type]
-        # make sure all bytes are received
-        if len(data) < expected_message_length:
-            cprint(
-                f"\nReceived {len(data)} bytes,"
-                + f" expected {expected_message_length} bytes"
-                + " - Data will not be saved to file",
-                "red",
-            )
-            return
-        else:
-            cprint(f"\nReceived {len(data)}B", "green")
-
-        # generate a random filename
-        filename = f"out/file-{time.time()}.bin"
-        # create the directory if it doesn't exist
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        # write the data to the file
-        with open(filename, "wb") as f:
-            f.write(data)
-        # print the filename
-        cprint(f"\nSaved to {filename}", "white", "on_red")
-
-    # Clean up the connection
-    connection.close()
-
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.bind((HOST, PORT))
-sock.listen(1)
-
-while True:
-    # Wait for a connection
-    cprint("\nWaiting for a connection...", attrs=["bold"])
-    connection, client_address = sock.accept()
-
-    # Modify the server code to start a new background thread for each new incoming
-    # connection, and handle it there.
-    t = threading.Thread(target=client_thread, args=(connection, client_address))
-    t.start()
+server = DSServer(HOST, PORT)
+server.spin()

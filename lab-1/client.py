@@ -77,10 +77,7 @@ The server should verify that every byte was received before saving the file.
 THIS IS THE CLIENT
 """
 
-import socket
-from termcolor import colored, cprint
-import os
-from message_type import MessageType
+from ds1lib import DSClient
 
 HOST = "127.0.0.1"  # The server's hostname or IP address
 PORT = 9000  # The port used by the server
@@ -88,68 +85,5 @@ PORT = 9000  # The port used by the server
 # print(MessageType.BinaryType.values())
 # print(MessageType.BinaryType.keys())
 
-while True:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        # Ask which message type to send
-        message_type = input(
-            colored("Enter message type (1 = string, 2 = binary): ", attrs=["bold"])
-        )
-        message_length = 0
-
-        if message_type == "1":
-            # read a string from the standard input
-            data = input(colored("Enter a string: ", attrs=["bold"]))
-            # convert the string to bytes and limit the size to 4kB
-            data = data.encode("utf-8")[:4096]
-        elif message_type == "2":
-            # ask for message length
-            print("Message length options:")
-            print(
-                "\t1: 1B\n\t2: 10B\n\t3: 100B"
-                + "\n\t4: 1KB\n\t5: 10KB\n\t6: 100KB"
-                + "\n\t7: 1MB\n\t8: 10MB\n\t9: 100MB\n"
-            )
-            binary_message_type_choice = input(
-                colored("Enter message length in bytes: ", attrs=["bold"])
-            )
-
-            try:
-                binary_message_type_choice = int(binary_message_type_choice)
-                if binary_message_type_choice not in range(len(MessageType.BinaryType)):
-                    raise ValueError
-            except ValueError:
-                cprint("Invalid message length", "red")
-                continue
-
-            message_length = list(MessageType.BinaryType.values())[
-                binary_message_type_choice
-            ]
-            # generate a random byte array
-            data = os.urandom(message_length)
-            # prepend the binary message type in one byte
-            data = bytes([binary_message_type_choice]) + data
-        else:
-            # invalid message type
-            cprint("Invalid message type", "red")
-            continue
-        # # read a string from the standard input
-        # data = input(colored("Enter a string: ", attrs=["bold"]))
-        # # convert the string to bytes and limit the size to 4kB
-        # data = data.encode("utf-8")[:4096]
-
-        # connect to the server
-        s.connect((HOST, PORT))
-        # print a status
-        cprint(f"Connected to {HOST}:{PORT}", "green")
-
-        # send some data
-        cprint(
-            f"Sending a message of type {message_type},"
-            + f" with a length of {message_length}B",
-            "blue",
-        )
-        s.sendall(data)
-
-        # closing the connection
-        cprint("Closing the connection", "red")
-        s.close()
+client = DSClient(HOST, PORT)
+client.spin()
